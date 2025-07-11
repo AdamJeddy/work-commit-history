@@ -3,7 +3,7 @@ import subprocess
 from datetime import datetime
 
 # Path to the text file containing commit information
-commit_file_path = 'item_creation_fe.txt'
+commit_file_path = 'chat_conv_dashboard.txt'
 
 # Read the commit information from the text file
 with open(commit_file_path, 'r') as file:
@@ -25,7 +25,7 @@ for line in commit_lines:
         message = message.rstrip('},')
 
         # Add the prefix to the commit message
-        message = f"[Temperature Dashboard] {message}"
+        message = f"[Chat Dashboard] {message}"
 
         # Convert date string to datetime object
         commit_date = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S %z')
