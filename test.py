@@ -3,7 +3,7 @@ import subprocess
 from datetime import datetime
 
 # Path to the text file containing commit information
-commit_file_path = 'temp.txt'
+commit_file_path = 'item_creation_fe.txt'
 
 # Read the commit information from the text file
 with open(commit_file_path, 'r') as file:
@@ -18,6 +18,11 @@ for line in commit_lines:
         author = parts[1].split(': ')[1]
         date_str = parts[2].split(': ')[1]
         message = parts[3].split(': ')[1]
+
+        # Unescape any '<COMMA>' placeholders (we replace ', ' when exporting)
+        message = message.replace('<COMMA>', ', ')
+        # Trim any accidental trailing commas or braces that might appear
+        message = message.rstrip('},')
 
         # Add the prefix to the commit message
         message = f"[Temperature Dashboard] {message}"
