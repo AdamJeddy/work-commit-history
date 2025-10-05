@@ -8,10 +8,10 @@ from datetime import datetime
 
 def parse_args():
     p = argparse.ArgumentParser(description='Create empty commits from a formatted export file')
-    p.add_argument('--file', '-f', default='chat_conv_dashboard.txt', help='input file')
+    p.add_argument('--file', '-f', default='translation_tool_fe.txt', help='input file')
     p.add_argument('--dry-run', action='store_true', default=True, help='print commands instead of running')
     p.add_argument('--no-dry-run', dest='dry_run', action='store_false', help='actually run git commit')
-    p.add_argument('--prefix', default='[Chat Dashboard] ', help='prefix to add to commit message')
+    p.add_argument('--prefix', default='[Translation Tool FE] ', help='prefix to add to commit message')
     return p.parse_args()
 
 
