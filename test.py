@@ -1,41 +1,89 @@
+import argparse
 import os
+import re
 import subprocess
+import sys
 from datetime import datetime
 
-# Path to the text file containing commit information
-commit_file_path = 'chat_conv_dashboard.txt'
 
-# Read the commit information from the text file
-with open(commit_file_path, 'r') as file:
-    commit_lines = file.readlines()
+def parse_args():
+    p = argparse.ArgumentParser(description='Create empty commits from a formatted export file')
+    p.add_argument('--file', '-f', default='chat_conv_dashboard.txt', help='input file')
+    p.add_argument('--dry-run', action='store_true', default=True, help='print commands instead of running')
+    p.add_argument('--no-dry-run', dest='dry_run', action='store_false', help='actually run git commit')
+    p.add_argument('--prefix', default='[Chat Dashboard] ', help='prefix to add to commit message')
+    return p.parse_args()
 
-# Extract commit details and create commits
-for line in commit_lines:
-    if line.startswith('{hash:'):
-        # Extract commit details
-        parts = line.strip('{}').split(', ')
-        commit_hash = parts[0].split(': ')[1]
-        author = parts[1].split(': ')[1]
-        date_str = parts[2].split(': ')[1]
-        message = parts[3].split(': ')[1]
 
-        # Unescape any '<COMMA>' placeholders (we replace ', ' when exporting)
-        message = message.replace('<COMMA>', ', ')
-        # Trim any accidental trailing commas or braces that might appear
-        message = message.rstrip('},')
+def main():
+    args = parse_args()
 
-        # Add the prefix to the commit message
-        message = f"[Chat Dashboard] {message}"
+    pattern = re.compile(r"^\{hash:\s*(?P<h>[^,}]+),\s*author:\s*(?P<a>[^,}]+),\s*date:\s*(?P<d>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [+-]\d{4}),\s*message:\s*(?P<m>.*)\},?\s*$")
 
-        # Convert date string to datetime object
-        commit_date = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S %z')
+    path = args.file
+    if not os.path.exists(path):
+        print(f'Input file not found: {path}', file=sys.stderr)
+        sys.exit(2)
 
-        # Set the environment variables for the commit
-        env = os.environ.copy()
-        env['GIT_AUTHOR_DATE'] = commit_date.isoformat()
-        env['GIT_COMMITTER_DATE'] = commit_date.isoformat()
+    total = 0
+    succeeded = 0
+    failed = 0
 
-        # Create the commit with the specific date and time
-        subprocess.run(['git', 'commit', '--allow-empty', '-m', message, '--date', commit_date.isoformat()], env=env)
+    with open(path, 'r', encoding='utf-8') as f:
+        for i, line in enumerate(f, start=1):
+            if not line.lstrip().startswith('{hash:'):
+                continue
+            m = pattern.match(line.strip())
+            if not m:
+                print(f'Line {i}: failed to parse: {line.strip()}', file=sys.stderr)
+                failed += 1
+                continue
 
-print("Commits created successfully.")
+            commit_hash = m.group('h').strip()
+            author = m.group('a').strip()
+            date_str = m.group('d').strip()
+            message = m.group('m')
+
+            # Unescape placeholders and normalize
+            message = message.replace('<COMMA>', ', ')
+            message = message.rstrip('},').rstrip()
+            message = f"{args.prefix}{message}"
+
+            try:
+                commit_date = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S %z')
+            except Exception as e:
+                print(f'Line {i}: date parse error "{date_str}": {e}', file=sys.stderr)
+                failed += 1
+                continue
+
+            env = os.environ.copy()
+            env['GIT_AUTHOR_DATE'] = commit_date.isoformat()
+            env['GIT_COMMITTER_DATE'] = commit_date.isoformat()
+            # preserve parsed author name (no email available) — Git will fall back to config for email
+            env['GIT_AUTHOR_NAME'] = author
+            env['GIT_COMMITTER_NAME'] = author
+
+            cmd = ['git', 'commit', '--allow-empty', '-m', message, '--date', commit_date.isoformat()]
+
+            total += 1
+            if args.dry_run:
+                print(f'{i}: DRY-RUN -> {" ".join(cmd)}  (author: {author})')
+                succeeded += 1
+                continue
+
+            print(f'Line {i}: running git commit for {commit_hash} (author: {author})')
+            p = subprocess.run(cmd, env=env)
+            if p.returncode == 0:
+                succeeded += 1
+            else:
+                print(f'Line {i}: git commit failed with exit {p.returncode}', file=sys.stderr)
+                failed += 1
+
+    print('\nSummary:')
+    print(f'  total lines processed: {total}')
+    print(f'  succeeded (or would succeed in dry-run): {succeeded}')
+    print(f'  failed: {failed}')
+
+
+if __name__ == '__main__':
+    main()
